@@ -1,19 +1,17 @@
 {
   "expo": {
-    "name": "yassirgo",
+    "name": "YassirGo",
     "slug": "yassirgo",
     "version": "1.0.0",
-    "sdkVersion": "53.0.0",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
     "android": {
-      "package": "com.yassirgo.app"
+      "package": "com.layachiadel.yassirgo",
+      "versionCode": 1
     },
     "extra": {
       "eas": {
-        "projectId": "ضع-هنا-Project-ID-تاع-Expo"
+        "projectId": "9e67c7c0-c129-4096-965e-4ff9105b7d01"
       }
     }
   }
