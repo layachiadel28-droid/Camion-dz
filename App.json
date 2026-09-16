@@ -8,11 +8,6 @@
     "android": {
       "package": "com.layachiadel.yassirgo",
       "versionCode": 1
-    },
-    "extra": {
-      "eas": {
-        "projectId": "9e67c7c0-c129-4096-965e-4ff9105b7d01"
-      }
     }
   }
 }
