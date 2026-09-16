@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "expo": "~51.0.0",
-    "react-native-maps": "1.18.0"
-  }
-}
