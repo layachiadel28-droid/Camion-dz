@@ -2,26 +2,38 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 18
-      - uses: actions/setup-java@v4
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+
       - name: Install deps
         run: npm install
-      - name: Build APK
+
+      - name: Build APK Fixed
         run: |
-          npx expo prebuild --platform android --no-install
+          npx expo prebuild --platform android --no-install --clean
+          mkdir -p android/app/src/main/assets
+          ENTRY=$(ls App.js App.tsx index.js index.tsx 2>/dev/null | head -n1)
+          echo "Entry file: $ENTRY"
+          npx react-native bundle --platform android --dev false --entry-file $ENTRY --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res/
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
