@@ -1,42 +1,44 @@
-name: Build Android Release APK
-
+name: Build APK
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-
+    branches: [ main ]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm install
-
+          node-version: 18
+          # نحينا cache باش ما يدورش على package-lock.json
+          
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-
+          java-version: '17'
+          
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Prebuild
+        run: npx expo prebuild --platform android --no-install --clean
+        
+      - name: Create Bundle
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle --platform android --dev false --entry-file node_modules/expo/AppEntry.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res/
+          
       - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
-
+          ./gradlew assembleDebug
+          
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: YassirGo-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: Camion-dz-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
