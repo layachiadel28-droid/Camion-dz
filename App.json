@@ -1,15 +1,19 @@
 {
   "expo": {
-    "name": "شاحنة",
-    "slug": "Camion-dz",
+    "name": "yassirgo",
+    "slug": "yassirgo",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "sdkVersion": "53.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "android": {
-      "package": "com.layachiadel.camiondz"
+      "package": "com.yassirgo.app"
     },
     "extra": {
       "eas": {
-        "projectId": "9e67c7c0-c129-4096-965e-4ff9105b7d01"
+        "projectId": "ضع-هنا-Project-ID-تاع-Expo"
       }
     }
   }
