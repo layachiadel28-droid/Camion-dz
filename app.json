@@ -1,10 +1,12 @@
 {
   "expo": {
-    "name": "YassirGo",
-    "slug": "yassirgo",
+    "name": "Camion-dz",
+    "slug": "Camion-dz",
     "version": "1.0.0",
     "orientation": "portrait",
-    "android": {"package": "com.yassirgo.app"},
-    "plugins": []
+    "platforms": ["android"],
+    "android": {
+      "package": "com.layachiadel.camiondz"
+    }
   }
 }
