@@ -1,16 +1,19 @@
 {
   "expo": {
-    "name": "شاحنة",
+    "name": "Camion-dz",
     "slug": "Camion-dz",
     "version": "1.0.0",
-    "orientation": "portrait",
     "android": {
-      "package": "com.layachiadel.camiondz"
+      "package": "com.camiondz.app",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "INTERNET"]
     },
-    "extra": {
-      "eas": {
-        "projectId": "9e67c7c0-c129-4096-965e-4ff9105b7d01"
-      }
-    }
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Camion-dz to use your location."
+        }
+      ]
+    ]
   }
 }
