@@ -1,8 +1,0 @@
-{
-  "expo": {
-    "name": "Camion DZ",
-    "slug": "camion-dz",
-    "version": "1.0.0",
-    "android": { "package": "com.camiondz.app" }
-  }
-}
