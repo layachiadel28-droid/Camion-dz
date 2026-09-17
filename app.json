@@ -5,11 +5,20 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "نحتاج إلى موقعك لعرض موقع الشاحنة أثناء الرحلة."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.layachiadel28.truckapp"
+      "package": "com.layachiadel28.truckapp",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     }
   }
 }
