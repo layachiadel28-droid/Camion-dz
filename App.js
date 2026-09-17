@@ -17,8 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 
-const OPENAI_API_KEY = 'PASTE_YOUR_OPENAI_API_KEY_HERE';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
 const KEYS = { user: '@camion_user', trips: '@camion_trips', plan: '@camion_plan' };
 
 const plans = [
@@ -34,38 +33,19 @@ const initialTrips = [
 ];
 
 async function askOpenAI(prompt) {
-  if (!OPENAI_API_KEY || OPENAI_API_KEY === 'PASTE_YOUR_OPENAI_API_KEY_HERE') {
-    throw new Error('يرجى إدخال مفتاح OpenAI في ملف App.js قبل استخدام المساعد.');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'أنت مساعد ذكي عربي لصناعة النقل والخدمات اللوجستية. ساعد المستخدم في إدارة الرحلات، متابعة الشاحنات، وضع خطط التشغيل، حساب الأسعار، وأمثل باسم كاميون DZ.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.7,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: prompt }),
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    const errText = data?.error?.message || 'حدث خطأ في الاتصال بـ OpenAI.';
-    throw new Error(errText);
+    throw new Error(data?.error || 'حدث خطأ أثناء الاتصال بالمساعد.');
   }
 
-  return data.choices?.[0]?.message?.content?.trim() || 'لا يوجد رد.';
+  return data.reply || 'لا يوجد رد.';
 }
 
 export default function App() {
@@ -133,7 +113,7 @@ export default function App() {
       setChatMessages((current) => [...current, { id: `bot-${Date.now()}`, role: 'assistant', text: answer }]);
     } catch (error) {
       setChatMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'assistant', text: error?.message || 'حدث خطأ أثناء الاتصال بالخادم.' }]);
-      Alert.alert('خطأ في المساعد', error?.message || 'حدث خطأ أثناء الاتصال بالخادم.');
+      Alert.alert('خطأ في المساعد', error?.message || 'يرجى تشغيل الخادم أو ضبط EXPO_PUBLIC_API_URL.');
     } finally {
       setChatLoading(false);
     }
