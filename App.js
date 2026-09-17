@@ -17,16 +17,56 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 
+const OPENAI_API_KEY = 'PASTE_YOUR_OPENAI_API_KEY_HERE';
+const OPENAI_MODEL = 'gpt-4o-mini';
 const KEYS = { user: '@camion_user', trips: '@camion_trips', plan: '@camion_plan' };
+
 const plans = [
   { id: 'free', name: 'مجاني', price: '0 دج', features: ['حتى 3 رحلات', 'إدارة أساسية', 'خريطة GPS'] },
   { id: 'pro', name: 'احترافي', price: '1,500 دج / شهر', features: ['رحلات غير محدودة', 'تتبع GPS', 'تقارير ومشاركة'] },
   { id: 'business', name: 'مؤسسات', price: '4,500 دج / شهر', features: ['عدة مستخدمين', 'إدارة الأسطول', 'دعم وأولوية'] },
 ];
+
 const initialTrips = [
   { id: '1', truck: 'شاحنة مرسيدس', plate: '001234-16-00', driver: 'أحمد محمد', phone: '0550000000', cargo: 'مواد غذائية', from: 'الجزائر', to: 'وهران', status: 'في الطريق' },
   { id: '2', truck: 'شاحنة فولفو', plate: '002345-19-00', driver: 'خالد علي', phone: '0560000000', cargo: 'حديد', from: 'سطيف', to: 'قسنطينة', status: 'مكتملة' },
+  { id: '3', truck: 'شاحنة MAN', plate: '003456-21-00', driver: 'سامر عمر', phone: '0540000000', cargo: 'أسمنت', from: 'تبسة', to: 'ورقلة', status: 'جاري التحميل' },
 ];
+
+async function askOpenAI(prompt) {
+  if (!OPENAI_API_KEY || OPENAI_API_KEY === 'PASTE_YOUR_OPENAI_API_KEY_HERE') {
+    throw new Error('يرجى إدخال مفتاح OpenAI في ملف App.js قبل استخدام المساعد.');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'أنت مساعد ذكي عربي لصناعة النقل والخدمات اللوجستية. ساعد المستخدم في إدارة الرحلات، متابعة الشاحنات، وضع خطط التشغيل، حساب الأسعار، وأمثل باسم كاميون DZ.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.7,
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errText = data?.error?.message || 'حدث خطأ في الاتصال بـ OpenAI.';
+    throw new Error(errText);
+  }
+
+  return data.choices?.[0]?.message?.content?.trim() || 'لا يوجد رد.';
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -37,6 +77,11 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState(null);
   const [form, setForm] = useState({ truck: '', plate: '', driver: '', phone: '', cargo: '', from: '', to: '' });
+  const [chatMessages, setChatMessages] = useState([
+    { id: 'welcome', role: 'assistant', text: 'مرحباً! أنا مساعد كاميون DZ. أستطيع أن أساعدك في إدارة الرحلات، متابعة الشاحنات، أو اقتراح حلول تشغيلية.' },
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([AsyncStorage.getItem(KEYS.user), AsyncStorage.getItem(KEYS.trips), AsyncStorage.getItem(KEYS.plan)])
@@ -46,6 +91,7 @@ export default function App() {
         if (savedPlan) setPlan(savedPlan);
       });
   }, []);
+
   useEffect(() => { AsyncStorage.setItem(KEYS.trips, JSON.stringify(trips)); }, [trips]);
   useEffect(() => { if (user) AsyncStorage.setItem(KEYS.user, JSON.stringify(user)); }, [user]);
 
@@ -70,42 +116,353 @@ export default function App() {
   };
 
   const updateStatus = (id) => setTrips((current) => current.map((trip) => trip.id === id ? { ...trip, status: trip.status === 'جاري التحميل' ? 'في الطريق' : trip.status === 'في الطريق' ? 'مكتملة' : 'جاري التحميل' } : trip));
+
   const logout = () => { setUser(null); AsyncStorage.removeItem(KEYS.user); };
+
+  const sendChatMessage = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+
+    const userMessage = { id: Date.now().toString(), role: 'user', text };
+    setChatMessages((current) => [...current, userMessage]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const answer = await askOpenAI(`${text}\n\nالسياق: التطبيق هو "كاميون DZ" لإدارة شاحنات، رحلات، اشتراكات، وتتبع GPS.`);
+      setChatMessages((current) => [...current, { id: `bot-${Date.now()}`, role: 'assistant', text: answer }]);
+    } catch (error) {
+      setChatMessages((current) => [...current, { id: `error-${Date.now()}`, role: 'assistant', text: error?.message || 'حدث خطأ أثناء الاتصال بالخادم.' }]);
+      Alert.alert('خطأ في المساعد', error?.message || 'حدث خطأ أثناء الاتصال بالخادم.');
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   if (!user) return <Registration onRegistered={setUser} />;
 
-  return <SafeAreaView style={styles.container}>
-    <StatusBar barStyle="light-content" backgroundColor="#123047" />
-    <View style={styles.header}><View><Text style={styles.title}>كاميون DZ 🚚</Text><Text style={styles.subtitle}>مرحباً، {user.name}</Text></View><Text style={styles.plan}>{plans.find((p) => p.id === plan)?.name}</Text></View>
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#123047" />
 
-    {screen === 'home' && <>
-      <View style={styles.stats}><Stat label="كل الرحلات" value={trips.length} /><Stat label="في الطريق" value={trips.filter((t) => t.status === 'في الطريق').length} /><Stat label="مكتملة" value={trips.filter((t) => t.status === 'مكتملة').length} /></View>
-      <View style={styles.search}><TextInput value={search} onChangeText={setSearch} placeholder="ابحث عن رحلة أو شاحنة..." placeholderTextColor="#8a99a8" style={styles.searchInput} textAlign="right" /><Text>🔍</Text></View>
-      <TouchableOpacity style={styles.addButton} onPress={() => setShowTripForm(true)}><Text style={styles.addText}>＋ تسجيل رحلة جديدة</Text></TouchableOpacity>
-      <FlatList data={filteredTrips} keyExtractor={(item) => item.id} renderItem={({ item }) => <TripCard trip={item} onStatus={() => updateStatus(item.id)} />} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={styles.empty}>لا توجد رحلات.</Text>} />
-    </>}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>كاميون DZ 🚚</Text>
+          <Text style={styles.subtitle}>مرحباً، {user.name}</Text>
+        </View>
+        <Text style={styles.plan}>{plans.find((p) => p.id === plan)?.name || 'مجاني'}</Text>
+      </View>
 
-    {screen === 'map' && <View style={styles.flex}><Text style={styles.section}>الخريطة وتتبع الشاحنات</Text><View style={styles.mapWrap}>{location ? <MapView style={styles.map} region={{ latitude: location.latitude, longitude: location.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 }} showsUserLocation><Marker coordinate={location} title="موقعك الحالي" /></MapView> : <Text style={styles.mapPlaceholder}>اضغط لتحديد موقعك على الخريطة</Text>}<TouchableOpacity style={styles.gpsButton} onPress={requestLocation}><Text style={styles.gpsText}>📍 تحديث موقعي GPS</Text></TouchableOpacity></View><Text style={styles.info}>التتبع المعروض هو موقع الهاتف الحالي. التتبع المباشر لكل شاحنة يحتاج جهاز GPS أو تطبيق السائق وحساباً مشتركاً.</Text></View>}
+      {screen === 'home' && (
+        <>
+          <View style={styles.stats}>
+            <Stat label="كل الرحلات" value={trips.length} />
+            <Stat label="في الطريق" value={trips.filter((t) => t.status === 'في الطريق').length} />
+            <Stat label="مكتملة" value={trips.filter((t) => t.status === 'مكتملة').length} />
+          </View>
 
-    {screen === 'subscription' && <Subscription plan={plan} onSelect={(id) => { setPlan(id); AsyncStorage.setItem(KEYS.plan, id); Alert.alert('تم الاختيار', 'تم تفعيل الخطة محلياً. ربط الدفع الإلكتروني يحتاج حساب دفع وخادماً.'); }} />}
+          <View style={styles.search}>
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="ابحث عن رحلة أو شاحنة..."
+              placeholderTextColor="#8a99a8"
+              style={styles.searchInput}
+            />
+          </View>
 
-    {screen === 'profile' && <View style={styles.profile}><Text style={styles.section}>حسابي</Text><Text style={styles.profileText}>الاسم: {user.name}</Text><Text style={styles.profileText}>الهاتف: {user.phone}</Text><Text style={styles.profileText}>الخطة الحالية: {plans.find((p) => p.id === plan)?.name}</Text><TouchableOpacity style={styles.logout} onPress={logout}><Text style={styles.logoutText}>تسجيل الخروج</Text></TouchableOpacity></View>}
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowTripForm(true)}>
+            <Text style={styles.addText}>＋ تسجيل رحلة جديدة</Text>
+          </TouchableOpacity>
 
-    <View style={styles.nav}>{[['home', 'الرئيسية'], ['map', 'الخريطة'], ['subscription', 'الاشتراك'], ['profile', 'حسابي']].map(([id, label]) => <TouchableOpacity key={id} style={styles.navItem} onPress={() => setScreen(id)}><Text style={[styles.navText, screen === id && styles.navActive]}>{id === 'home' ? '🏠' : id === 'map' ? '🗺️' : id === 'subscription' ? '⭐' : '👤'}\n{label}</Text></TouchableOpacity>)}</View>
+          <FlatList
+            data={filteredTrips}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <TripCard trip={item} onStatus={() => updateStatus(item.id)} />}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
+      )}
 
-    <Modal visible={showTripForm} animationType="slide" transparent onRequestClose={() => setShowTripForm(false)}><KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.modal}><Text style={styles.modalTitle}>تسجيل رحلة جديدة</Text>{[['truck', 'اسم الشاحنة *'], ['plate', 'رقم التسجيل *'], ['driver', 'اسم السائق *'], ['phone', 'هاتف السائق'], ['cargo', 'نوع الحمولة *'], ['from', 'نقطة الانطلاق *'], ['to', 'الوجهة *']].map(([key, placeholder]) => <TextInput key={key} value={form[key]} onChangeText={(value) => setForm({ ...form, [key]: value })} placeholder={placeholder} placeholderTextColor="#8a99a8" textAlign="right" style={styles.input} keyboardType={key === 'phone' ? 'phone-pad' : 'default'} />)}<TouchableOpacity style={styles.saveButton} onPress={saveTrip}><Text style={styles.saveText}>حفظ الرحلة</Text></TouchableOpacity><TouchableOpacity onPress={() => setShowTripForm(false)}><Text style={styles.cancel}>إلغاء</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
-  </SafeAreaView>;
+      {screen === 'map' && (
+        <View style={styles.flex}>
+          <Text style={styles.section}>الخريطة وتتبع الشاحنات</Text>
+          <View style={styles.mapWrap}>
+            {location ? (
+              <MapView style={styles.map} initialRegion={{
+                latitude: location.latitude,
+                longitude: location.longitude,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}>
+                <Marker coordinate={{ latitude: location.latitude, longitude: location.longitude }} title="موقعك الحالي" />
+              </MapView>
+            ) : (
+              <View style={styles.mapPlaceholder}>
+                <Text style={styles.info}>لا يوجد موقع حتى الآن.</Text>
+                <TouchableOpacity style={styles.smallAction} onPress={requestLocation}>
+                  <Text style={styles.smallActionText}>فتح GPS</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {screen === 'subscription' && (
+        <Subscription
+          plan={plan}
+          onSelect={(id) => {
+            setPlan(id);
+            AsyncStorage.setItem(KEYS.plan, id);
+            Alert.alert('تم الاختيار', 'تم تفعيل الخطة المحددة بنجاح.');
+          }}
+        />
+      )}
+
+      {screen === 'profile' && (
+        <View style={styles.profile}>
+          <Text style={styles.section}>حسابي</Text>
+          <Text style={styles.profileText}>الاسم: {user.name}</Text>
+          <Text style={styles.profileText}>الهاتف: {user.phone}</Text>
+          <Text style={styles.profileText}>الخطة الحالية: {plans.find((p) => p.id === plan)?.name || 'مجاني'}</Text>
+          <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+            <Text style={styles.logoutText}>تسجيل الخروج</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {screen === 'assistant' && (
+        <View style={styles.chatContainer}>
+          <Text style={styles.section}>المساعد الذكي</Text>
+          <FlatList
+            data={chatMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={[styles.chatBubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+                <Text style={[styles.chatText, item.role === 'user' ? styles.userText : styles.aiText]}>{item.text}</Text>
+              </View>
+            )}
+            contentContainerStyle={styles.chatList}
+            showsVerticalScrollIndicator={false}
+          />
+
+          <View style={styles.chatInputRow}>
+            <TextInput
+              value={chatInput}
+              onChangeText={setChatInput}
+              placeholder="اكتب سؤالك للمساعد..."
+              placeholderTextColor="#7f8e9d"
+              style={styles.chatInput}
+              multiline
+            />
+            <TouchableOpacity style={styles.sendButton} onPress={sendChatMessage} disabled={chatLoading}>
+              <Text style={styles.sendButtonText}>{chatLoading ? '...' : 'إرسال'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.nav}>
+        {[
+          ['home', 'الرئيسية'],
+          ['map', 'الخريطة'],
+          ['subscription', 'الاشتراك'],
+          ['assistant', 'المساعد'],
+          ['profile', 'حسابي'],
+        ].map(([id, label]) => (
+          <TouchableOpacity
+            key={id}
+            style={[styles.navItem, screen === id && styles.navItemActive]}
+            onPress={() => setScreen(id)}
+          >
+            <Text style={[styles.navText, screen === id && styles.navTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Modal visible={showTripForm} animationType="slide" transparent onRequestClose={() => setShowTripForm(false)}>
+        <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalCard}>
+            <Text style={styles.section}>إضافة رحلة جديدة</Text>
+            <TextInput value={form.truck} onChangeText={(v) => setForm((p) => ({ ...p, truck: v }))} placeholder="نوع الشاحنة" style={styles.input} />
+            <TextInput value={form.plate} onChangeText={(v) => setForm((p) => ({ ...p, plate: v }))} placeholder="اللوحة" style={styles.input} />
+            <TextInput value={form.driver} onChangeText={(v) => setForm((p) => ({ ...p, driver: v }))} placeholder="اسم السائق" style={styles.input} />
+            <TextInput value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} placeholder="رقم الهاتف" keyboardType="phone-pad" style={styles.input} />
+            <TextInput value={form.cargo} onChangeText={(v) => setForm((p) => ({ ...p, cargo: v }))} placeholder="نوع البضاعة" style={styles.input} />
+            <TextInput value={form.from} onChangeText={(v) => setForm((p) => ({ ...p, from: v }))} placeholder="من" style={styles.input} />
+            <TextInput value={form.to} onChangeText={(v) => setForm((p) => ({ ...p, to: v }))} placeholder="إلى" style={styles.input} />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowTripForm(false)}>
+                <Text style={styles.cancelText}>إلغاء</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.submitButton} onPress={saveTrip}>
+                <Text style={styles.submitText}>حفظ</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
 function Registration({ onRegistered }) {
-  const [name, setName] = useState(''); const [phone, setPhone] = useState(''); const [password, setPassword] = useState('');
-  const register = () => { if (!name.trim() || !/^0[5-7][0-9]{8}$/.test(phone) || password.length < 4) return Alert.alert('تحقق من البيانات', 'أدخل الاسم، رقم هاتف جزائري صحيح وكلمة مرور من 4 أحرف على الأقل.'); onRegistered({ name, phone }); };
-  return <SafeAreaView style={styles.auth}><Text style={styles.logo}>🚚</Text><Text style={styles.authTitle}>كاميون DZ</Text><Text style={styles.authSubtitle}>إدارة نقل الشاحنات بسهولة</Text><TextInput placeholder="الاسم الكامل" value={name} onChangeText={setName} style={styles.authInput} textAlign="right" /><TextInput placeholder="رقم الهاتف الجزائري" value={phone} onChangeText={setPhone} style={styles.authInput} keyboardType="phone-pad" textAlign="right" /><TextInput placeholder="كلمة المرور" value={password} onChangeText={setPassword} style={styles.authInput} secureTextEntry textAlign="right" /><TouchableOpacity style={styles.register} onPress={register}><Text style={styles.registerText}>إنشاء حساب</Text></TouchableOpacity><Text style={styles.note}>التسجيل محلي للتجربة. لإضافة دخول حقيقي نحتاج خادم وقاعدة بيانات.</Text></SafeAreaView>;
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+
+  const register = () => {
+    if (!name.trim() || !/^0[5-7][0-9]{8}$/.test(phone) || password.length < 4) {
+      return Alert.alert('تحقق من البيانات', 'أدخل الاسم، رقم هاتف صحيح، وكلمة مرور لا تقل عن 4 أحرف.');
+    }
+
+    onRegistered({ name, phone, password });
+  };
+
+  return (
+    <SafeAreaView style={styles.auth}>
+      <Text style={styles.logo}>🚚</Text>
+      <Text style={styles.authTitle}>كاميون DZ</Text>
+      <Text style={styles.authSubtitle}>إدارة نقل الشاحنات</Text>
+      <TextInput value={name} onChangeText={setName} placeholder="الاسم الكامل" style={styles.authInput} />
+      <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="رقم الهاتف" style={styles.authInput} />
+      <TextInput value={password} onChangeText={setPassword} secureTextEntry placeholder="كلمة المرور" style={styles.authInput} />
+      <TouchableOpacity style={styles.authButton} onPress={register}>
+        <Text style={styles.authButtonText}>تسجيل الدخول</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  );
 }
-function TripCard({ trip, onStatus }) { const color = trip.status === 'مكتملة' ? '#16a085' : trip.status === 'في الطريق' ? '#e67e22' : '#2980b9'; return <View style={styles.card}><View style={styles.cardTop}><View style={[styles.badge, { backgroundColor: color }]}><Text style={styles.badgeText}>{trip.status}</Text></View><View><Text style={styles.cardTitle}>🚚 {trip.truck}</Text><Text style={styles.muted}>{trip.plate}</Text></View></View><Text style={styles.route}>{trip.from}  ←  {trip.to}</Text><Text style={styles.detail}>👤 {trip.driver}  •  📦 {trip.cargo}</Text><TouchableOpacity style={styles.statusButton} onPress={onStatus}><Text style={styles.statusText}>تحديث الحالة</Text></TouchableOpacity></View>; }
-function Stat({ label, value }) { return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.muted}>{label}</Text></View>; }
-function Subscription({ plan, onSelect }) { return <View style={styles.flex}><Text style={styles.section}>اختر اشتراكك</Text><Text style={styles.info}>ابدأ مجاناً أو اختر الخطة المناسبة لأسطولك.</Text><FlatList data={plans} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} renderItem={({ item }) => <View style={[styles.planCard, plan === item.id && styles.selectedPlan]}><View style={styles.planHeader}><Text style={styles.planName}>{item.name}</Text><Text style={styles.price}>{item.price}</Text></View>{item.features.map((feature) => <Text key={feature} style={styles.feature}>✓ {feature}</Text>)}<TouchableOpacity style={styles.choose} onPress={() => onSelect(item.id)}><Text style={styles.chooseText}>{plan === item.id ? 'الخطة الحالية' : 'اختيار الخطة'}</Text></TouchableOpacity></View>} /></View>; }
+
+function TripCard({ trip, onStatus }) {
+  const color = trip.status === 'مكتملة' ? '#16a085' : trip.status === 'في الطريق' ? '#e67e22' : '#2980b9';
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardRow}>
+        <Text style={styles.tripTitle}>{trip.truck}</Text>
+        <Text style={[styles.badge, { backgroundColor: color }]}>{trip.status}</Text>
+      </View>
+      <Text style={styles.tripText}>اللوحة: {trip.plate}</Text>
+      <Text style={styles.tripText}>السائق: {trip.driver}</Text>
+      <Text style={styles.tripText}>من: {trip.from} إلى: {trip.to}</Text>
+      <Text style={styles.tripText}>البضاعة: {trip.cargo}</Text>
+      <TouchableOpacity style={styles.statusButton} onPress={onStatus}>
+        <Text style={styles.statusText}>تغيير الحالة</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.muted}>{label}</Text>
+    </View>
+  );
+}
+
+function Subscription({ plan, onSelect }) {
+  return (
+    <View style={styles.flex}>
+      <Text style={styles.section}>اختر اشتراكك</Text>
+      <Text style={styles.info}>ابدأ مجاناً أو اختر باقة مناسبة لعملك.</Text>
+      {plans.map((item) => (
+        <TouchableOpacity
+          key={item.id}
+          style={[styles.planCard, plan === item.id && styles.planCardActive]}
+          onPress={() => onSelect(item.id)}
+        >
+          <Text style={styles.planName}>{item.name}</Text>
+          <Text style={styles.planPrice}>{item.price}</Text>
+          {item.features.map((feature) => (
+            <Text key={feature} style={styles.planFeature}>• {feature}</Text>
+          ))}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f6f8' }, flex: { flex: 1 }, header: { backgroundColor: '#123047', padding: 18, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, title: { color: '#fff', fontSize: 24, fontWeight: 'bold' }, subtitle: { color: '#b9cbd8', textAlign: 'right', marginTop: 3 }, plan: { color: '#fff', backgroundColor: '#16a085', padding: 8, borderRadius: 15 }, stats: { flexDirection: 'row-reverse', backgroundColor: '#fff', margin: 12, borderRadius: 12, padding: 15 }, stat: { flex: 1, alignItems: 'center' }, statValue: { color: '#123047', fontSize: 22, fontWeight: 'bold' }, muted: { color: '#82929c', fontSize: 12 }, search: { backgroundColor: '#fff', marginHorizontal: 12, borderRadius: 10, paddingHorizontal: 12, flexDirection: 'row-reverse', alignItems: 'center' }, searchInput: { flex: 1, padding: 12 }, addButton: { backgroundColor: '#f39c12', margin: 12, padding: 13, borderRadius: 9, alignItems: 'center' }, addText: { color: '#fff', fontWeight: 'bold' }, list: { padding: 12, paddingBottom: 20 }, card: { backgroundColor: '#fff', padding: 15, borderRadius: 13, marginBottom: 12, elevation: 2 }, cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between' }, cardTitle: { color: '#123047', fontWeight: 'bold', fontSize: 17, textAlign: 'right' }, badge: { padding: 7, borderRadius: 16, height: 32 }, badgeText: { color: '#fff', fontSize: 11 }, route: { backgroundColor: '#f2f7fa', color: '#123047', textAlign: 'center', padding: 11, marginVertical: 10, fontWeight: 'bold' }, detail: { color: '#647783', textAlign: 'right' }, statusButton: { backgroundColor: '#123047', padding: 10, borderRadius: 8, alignItems: 'center', marginTop: 12 }, statusText: { color: '#fff', fontWeight: 'bold' }, mapWrap: { height: 430, margin: 12, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dce7ed', justifyContent: 'center', alignItems: 'center' }, map: { ...StyleSheet.absoluteFillObject }, mapPlaceholder: { color: '#456879', fontWeight: 'bold' }, gpsButton: { position: 'absolute', bottom: 15, backgroundColor: '#123047', padding: 12, borderRadius: 9 }, gpsText: { color: '#fff', fontWeight: 'bold' }, section: { color: '#123047', fontSize: 21, fontWeight: 'bold', textAlign: 'right', margin: 16 }, info: { color: '#647783', textAlign: 'right', marginHorizontal: 16, lineHeight: 22 }, nav: { flexDirection: 'row-reverse', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e9ed', paddingBottom: 6 }, navItem: { flex: 1, alignItems: 'center', padding: 8 }, navText: { textAlign: 'center', color: '#82929c', fontSize: 11, lineHeight: 20 }, navActive: { color: '#123047', fontWeight: 'bold' }, profile: { flex: 1 }, profileText: { backgroundColor: '#fff', padding: 16, marginHorizontal: 12, marginBottom: 8, textAlign: 'right', color: '#456879' }, logout: { backgroundColor: '#c0392b', margin: 16, padding: 13, borderRadius: 9, alignItems: 'center' }, logoutText: { color: '#fff', fontWeight: 'bold' }, planCard: { backgroundColor: '#fff', borderRadius: 14, padding: 17, marginBottom: 12, elevation: 2 }, selectedPlan: { borderWidth: 2, borderColor: '#16a085' }, planHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between' }, planName: { color: '#123047', fontSize: 19, fontWeight: 'bold' }, price: { color: '#16a085', fontWeight: 'bold' }, feature: { color: '#647783', textAlign: 'right', marginTop: 9 }, choose: { backgroundColor: '#123047', borderRadius: 8, padding: 11, alignItems: 'center', marginTop: 14 }, chooseText: { color: '#fff', fontWeight: 'bold' }, auth: { flex: 1, backgroundColor: '#123047', justifyContent: 'center', padding: 24 }, logo: { textAlign: 'center', fontSize: 55 }, authTitle: { color: '#fff', textAlign: 'center', fontSize: 30, fontWeight: 'bold' }, authSubtitle: { color: '#b9cbd8', textAlign: 'center', marginBottom: 28 }, authInput: { backgroundColor: '#fff', borderRadius: 9, padding: 14, marginBottom: 12 }, register: { backgroundColor: '#f39c12', padding: 14, borderRadius: 9, alignItems: 'center' }, registerText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }, note: { color: '#b9cbd8', textAlign: 'center', marginTop: 18, fontSize: 12 }, overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,.45)' }, modal: { backgroundColor: '#f3f6f8', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, maxHeight: '92%' }, modalTitle: { color: '#123047', textAlign: 'right', fontSize: 21, fontWeight: 'bold', marginBottom: 12 }, input: { backgroundColor: '#fff', borderRadius: 9, padding: 12, marginBottom: 9, borderWidth: 1, borderColor: '#dce5ea' }, saveButton: { backgroundColor: '#16a085', padding: 14, borderRadius: 9, alignItems: 'center' }, saveText: { color: '#fff', fontWeight: 'bold' }, cancel: { textAlign: 'center', color: '#c0392b', padding: 14 }, empty: { textAlign: 'center', color: '#71808c', marginTop: 30 },
+  container: { flex: 1, backgroundColor: '#f3f6f8' },
+  flex: { flex: 1 },
+  header: {
+    backgroundColor: '#123047',
+    padding: 18,
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  title: { fontSize: 26, color: '#fff', fontWeight: '700', textAlign: 'right' },
+  subtitle: { fontSize: 15, color: '#dfeaf3', marginTop: 4, textAlign: 'right' },
+  plan: { color: '#fff', backgroundColor: '#1aa7a7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, fontWeight: '700' },
+  stats: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  stat: { flex: 1, backgroundColor: '#fff', padding: 14, borderRadius: 12, marginHorizontal: 4, alignItems: 'center' },
+  statValue: { fontSize: 20, fontWeight: '700', color: '#123047' },
+  muted: { fontSize: 12, color: '#72849a', marginTop: 4 },
+  search: { paddingHorizontal: 16, marginBottom: 10 },
+  searchInput: { backgroundColor: '#fff', borderRadius: 12, padding: 12, textAlign: 'right', borderWidth: 1, borderColor: '#dfe6ee' },
+  addButton: { backgroundColor: '#123047', padding: 14, marginHorizontal: 16, borderRadius: 12, marginBottom: 10 },
+  addText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
+  list: { paddingHorizontal: 16, paddingBottom: 20 },
+  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#edf2f5' },
+  cardRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  tripTitle: { fontSize: 18, fontWeight: '700', color: '#123047', textAlign: 'right' },
+  badge: { color: '#fff', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, fontSize: 11, fontWeight: '700' },
+  tripText: { textAlign: 'right', color: '#42556e', marginTop: 5 },
+  statusButton: { marginTop: 12, backgroundColor: '#eaf3ff', padding: 10, borderRadius: 10 },
+  statusText: { textAlign: 'center', color: '#123047', fontWeight: '700' },
+  section: { color: '#123047', fontWeight: '700', fontSize: 22, textAlign: 'right', marginHorizontal: 16, marginVertical: 12 },
+  mapWrap: { flex: 1, marginHorizontal: 16, marginBottom: 12, borderRadius: 14, overflow: 'hidden', backgroundColor: '#dfeaf3' },
+  map: { flex: 1 },
+  mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#dfeaf3' },
+  info: { color: '#123047', fontWeight: '700', marginBottom: 12 },
+  smallAction: { backgroundColor: '#123047', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
+  smallActionText: { color: '#fff', fontWeight: '700' },
+  profile: { flex: 1, paddingHorizontal: 16 },
+  profileText: { textAlign: 'right', color: '#123047', marginBottom: 10, fontSize: 16 },
+  logoutButton: { marginTop: 20, backgroundColor: '#d93a3a', borderRadius: 12, padding: 14 },
+  logoutText: { textAlign: 'center', color: '#fff', fontWeight: '700' },
+  nav: { flexDirection: 'row-reverse', justifyContent: 'space-between', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5edf3', paddingHorizontal: 8, paddingVertical: 10 },
+  navItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
+  navItemActive: { backgroundColor: '#eaf4ff' },
+  navText: { color: '#58708d', fontWeight: '700' },
+  navTextActive: { color: '#123047' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: 20 },
+  modalCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18 },
+  input: { backgroundColor: '#f5f7fa', borderRadius: 12, padding: 12, textAlign: 'right', marginBottom: 10, borderWidth: 1, borderColor: '#e5ebf1' },
+  modalActions: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 },
+  cancelButton: { flex: 1, backgroundColor: '#f0f3f6', padding: 12, borderRadius: 10, marginRight: 8 },
+  cancelText: { color: '#123047', textAlign: 'center', fontWeight: '700' },
+  submitButton: { flex: 1, backgroundColor: '#123047', padding: 12, borderRadius: 10, marginLeft: 8 },
+  submitText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
+  auth: { flex: 1, backgroundColor: '#123047', justifyContent: 'center', padding: 24 },
+  logo: { fontSize: 52, textAlign: 'center', marginBottom: 10 },
+  authTitle: { fontSize: 30, color: '#fff', fontWeight: '700', textAlign: 'center' },
+  authSubtitle: { color: '#d6e2ec', fontSize: 16, textAlign: 'center', marginBottom: 16 },
+  authInput: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 12, textAlign: 'right' },
+  authButton: { backgroundColor: '#1aa7a7', borderRadius: 12, padding: 14 },
+  authButtonText: { textAlign: 'center', color: '#fff', fontWeight: '700' },
+  planCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#dfeaf2' },
+  planCardActive: { borderColor: '#123047', backgroundColor: '#eef6ff' },
+  planName: { textAlign: 'right', fontSize: 20, fontWeight: '700', color: '#123047' },
+  planPrice: { textAlign: 'right', fontSize: 18, color: '#1aa7a7', marginVertical: 8 },
+  planFeature: { textAlign: 'right', color: '#465b72', marginTop: 4 },
+  chatContainer: { flex: 1, paddingHorizontal: 12, paddingTop: 12 },
+  chatList: { paddingBottom: 8 },
+  chatBubble: { maxWidth: '80%', padding: 12, borderRadius: 14, marginBottom: 10 },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: '#123047' },
+  aiBubble: { alignSelf: 'flex-start', backgroundColor: '#fff' },
+  chatText: { fontSize: 14, lineHeight: 20 },
+  userText: { color: '#fff', textAlign: 'right' },
+  aiText: { color: '#123047', textAlign: 'right' },
+  chatInputRow: { flexDirection: 'row-reverse', alignItems: 'flex-end', paddingVertical: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#edf3f7' },
+  chatInput: { flex: 1, minHeight: 48, maxHeight: 120, backgroundColor: '#f5f8fb', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, textAlign: 'right', marginRight: 8 },
+  sendButton: { backgroundColor: '#123047', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  sendButtonText: { color: '#fff', fontWeight: '700' },
 });
