@@ -34,13 +34,16 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
-      - name: Ensure splash resources exist
+      - name: Ensure Android color resources exist
         run: |
           mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
           cat > android/app/src/main/res/values/colors.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="splashscreen_background">#123047</color>
+              <color name="colorPrimary">#123047</color>
+              <color name="colorPrimaryDark">#0B1F2E</color>
+              <color name="colorAccent">#1AA7A7</color>
           </resources>
           EOF
           cat > android/app/src/main/res/drawable/splashscreen.xml <<'EOF'
@@ -54,7 +57,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
