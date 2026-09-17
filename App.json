@@ -1,10 +1,28 @@
 {
   "expo": {
-    "name": "Camion-dz",
-    "slug": "Camion-dz",
+    "name": "تطبيق نقل الشاحنات",
+    "slug": "truck-transport-app",
     "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e272e"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
-      "package": "com.camiondz.app"
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1e272e"
+      },
+      "package": "com.layachiadel28.truckapp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }
