@@ -33,14 +33,23 @@ jobs:
       - name: Ensure splash resources exist
         run: |
           mkdir -p android/app/src/main/res/values
-          cat > android/app/src/main/res/values/splashscreen_background.xml <<'EOF'
+          mkdir -p android/app/src/main/res/drawable
+
+          cat > android/app/src/main/res/values/colors.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-            <color name="splashscreen_background">#123047</color>
+              <color name="splashscreen_background">#123047</color>
           </resources>
           EOF
 
-      - name: Disable Jetifier for React Native 0.74 Hermes
+          cat > android/app/src/main/res/drawable/splashscreen.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@color/splashscreen_background" />
+          </layer-list>
+          EOF
+
+      - name: Disable Jetifier for React Native 0.74
         run: |
           if [ -f android/gradle.properties ]; then
             sed -i '/^android.enableJetifier=/d' android/gradle.properties
