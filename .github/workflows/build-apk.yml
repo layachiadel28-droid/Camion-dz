@@ -30,11 +30,18 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
+      - name: Disable Jetifier for React Native 0.74 Hermes
+        run: |
+          if [ -f android/gradle.properties ]; then
+            sed -i '/^android.enableJetifier=/d' android/gradle.properties
+            printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
+          fi
+
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew clean assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
