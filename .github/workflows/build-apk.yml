@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -17,31 +18,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+
+      - name: Validate Expo configuration
+        run: npx expo config --type public
 
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
       - name: Ensure splash resources exist
         run: |
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/res/drawable
-
+          mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
           cat > android/app/src/main/res/values/colors.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <color name="splashscreen_background">#123047</color>
           </resources>
           EOF
-
           cat > android/app/src/main/res/drawable/splashscreen.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
@@ -49,18 +52,11 @@ jobs:
           </layer-list>
           EOF
 
-      - name: Disable Jetifier for React Native 0.74
-        run: |
-          if [ -f android/gradle.properties ]; then
-            sed -i '/^android.enableJetifier=/d' android/gradle.properties
-            printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
-          fi
-
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
