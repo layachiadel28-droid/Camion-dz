@@ -30,6 +30,16 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
+      - name: Ensure splash resources exist
+        run: |
+          mkdir -p android/app/src/main/res/values
+          cat > android/app/src/main/res/values/splashscreen_background.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <color name="splashscreen_background">#123047</color>
+          </resources>
+          EOF
+
       - name: Disable Jetifier for React Native 0.74 Hermes
         run: |
           if [ -f android/gradle.properties ]; then
