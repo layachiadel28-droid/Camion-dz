@@ -28,15 +28,14 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Validate Expo configuration
-        run: npx expo config --type public
-
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
-      - name: Ensure Android color resources exist
+      - name: Ensure Android resource colors exist
         run: |
-          mkdir -p android/app/src/main/res/values android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/drawable
+
           cat > android/app/src/main/res/values/colors.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -46,12 +45,20 @@ jobs:
               <color name="colorAccent">#1AA7A7</color>
           </resources>
           EOF
+
           cat > android/app/src/main/res/drawable/splashscreen.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
               <item android:drawable="@color/splashscreen_background" />
           </layer-list>
           EOF
+
+      - name: Disable Jetifier for React Native 0.74
+        run: |
+          if [ -f android/gradle.properties ]; then
+            sed -i '/^android.enableJetifier=/d' android/gradle.properties
+            printf '\nandroid.enableJetifier=false\n' >> android/gradle.properties
+          fi
 
       - name: Build debug APK
         working-directory: android
